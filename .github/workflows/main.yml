@@ -29,8 +29,6 @@ name: Deploy React App to EC2 via Self-Hosted + OIDC
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 permissions:
   id-token: write
@@ -39,6 +37,7 @@ permissions:
 jobs:
   deploy:
     runs-on: self-hosted
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -50,9 +49,11 @@ jobs:
 
       - name: Install Dependencies
         run: npm install
+        working-directory: ./my-react-app
 
       - name: Build React App
         run: npm run build
+        working-directory: ./my-react-app
 
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -64,8 +65,12 @@ jobs:
       - name: Deploy to EC2 via SSM
         run: |
           aws ssm send-command \
-            --targets "Key=InstanceIds,Values=<i-012bcdce6e0c7a177>" \
+            --targets "Key=InstanceIds,Values=i-012bcdce6e0c7a177" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy React app" \
-            --parameters 'commands=["cd /var/www/my-react-app && git pull && npm install && npm ci && npm run build"]'
-
+            --parameters 'commands=[
+              "cd /var/www/my-react-app",
+              "git pull",
+              "npm install",
+              "npm run build"
+            ]'
