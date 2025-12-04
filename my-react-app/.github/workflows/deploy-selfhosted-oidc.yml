@@ -1,0 +1,27 @@
+# Example: deploy-selfhosted-oidc.yml
+name: Deploy via Self-Hosted + OIDC
+on:
+  push:
+    branches: [ main ]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::050752612531:role/GitHubActions-Role-MyRepo
+          aws-region: ap-south-1
+          role-session-name: github-actions-session
+      - name: Confirm AWS Role
+        run: aws sts get-caller-identity
+
+      # - name: Deploy to S3
+      #   run: |
+      #     aws s3 cp ./build/my-app.zip s3://my-deploy-bucket/path/
+      #     echo "Deployment complete!"
