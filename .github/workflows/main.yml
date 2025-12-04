@@ -24,56 +24,58 @@
         # run: |
         #   aws s3 cp ./build/my-app.zip s3://my-deploy-bucket/path/
         #   echo "Deployment complete!"
-name: Deploy React App to EC2 via Self-Hosted + OIDC
-
+name: Deploy Next.js App to EC2 via Self-Hosted + OIDC
 on:
   push:
     branches: [ main ]
-
 permissions:
   id-token: write
   contents: read
-
 jobs:
   deploy:
     runs-on: self-hosted
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
-
+      
       - name: Install Dependencies
         run: npm install
-        working-directory: ./my-react-app
-
-      - name: Build React App
+        working-directory: ./my-nextjs-app
+      
+      - name: Build Next.js App
         run: npm run build
-        working-directory: ./my-react-app
-
+        working-directory: ./my-nextjs-app
+        env:
+          NODE_ENV: production
+      
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::050752612531:role/githubaction
           aws-region: ap-south-1
           role-session-name: github-actions-session
-
-      - name: Deploy build folder to EC2 via SSM
+      
+      - name: Deploy to EC2 via SSM
         run: |
           aws ssm send-command \
             --targets "Key=InstanceIds,Values=i-012bcdce6e0c7a177" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy React build" \
+            --comment "Deploy Next.js app" \
             --parameters 'commands=[
-              "rm -rf /var/www/my-react-app/*",
-              "mkdir -p /var/www/my-react-app",
-              "cp -r $GITHUB_WORKSPACE/todo_hellow_world/my-react-app/build/* /var/www/my-react-app/",
-              "pm2 stop my-react-app || true",
-              "pm2 serve /var/www/my-react-app 3000 --name my-react-app --spa",
+              "sudo rm -rf /var/www/my-nextjs-app",
+              "sudo mkdir -p /var/www/my-nextjs-app",
+              "sudo cp -r /home/ubuntu/actions-runner/_work/todo_hellow_world/todo_hellow_world/my-nextjs-app /var/www/",
+              "cd /var/www/my-nextjs-app",
+              "sudo chown -R ubuntu:ubuntu /var/www/my-nextjs-app",
+              "npm install --production",
+              "pm2 stop my-nextjs-app || true",
+              "pm2 delete my-nextjs-app || true",
+              "pm2 start npm --name my-nextjs-app -- start",
               "pm2 save"
             ]' \
             --output text
