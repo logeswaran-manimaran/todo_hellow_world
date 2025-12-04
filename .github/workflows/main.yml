@@ -1,10 +1,85 @@
-name: Test Trigger
+# # Example: deploy-selfhosted-oidc.yml
+# name: Deploy via Self-Hosted + OIDC
+# on:
+#   push:
+#     branches: [ main ]
+# permissions:
+#   id-token: write
+#   contents: read
+# jobs:
+#   deploy:
+#     runs-on: self-hosted
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
+#       - name: Configure AWS Credentials via OIDC
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: arn:aws:iam::050752612531:role/githubaction
+#           aws-region: ap-south-1
+#           role-session-name: github-actions-session
+#       - name: Confirm AWS Role
+#         run: aws sts get-caller-identity
+      # - name: Deploy to S3
+        # run: |
+        #   aws s3 cp ./build/my-app.zip s3://my-deploy-bucket/path/
+        #   echo "Deployment complete!"
+name: Deploy Vite React App to EC2 via Self-Hosted + OIDC
+
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: self-hosted
+
     steps:
-      - run: echo "Workflow triggered!"
+      # Step 1: Checkout your code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Configure AWS credentials via OIDC
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::050752612531:role/githubaction
+          aws-region: ap-south-1
+          role-session-name: github-actions-session
+
+      # Step 3: Deploy & Build on EC2 via SSM
+      - name: Deploy React App to EC2 via SSM
+        run: |
+          aws ssm send-command \
+            --targets "Key=InstanceIds,Values=i-012bcdce6e0c7a177" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Build & Deploy React App" \
+            --parameters 'commands=[
+              "set -e",
+              "echo \"Navigating to app directory...\"",
+              "mkdir -p /var/www/my-react-app",
+              "cd /var/www/my-react-app",
+              "echo \"Pulling latest code from GitHub...\"",
+              "git init || true",
+              "git remote add origin https://github.com/logeswaran-manimaran/todo_hellow_world.git || true",
+              "git fetch origin",
+              "git reset --hard origin/main",
+              "echo \"Installing Node dependencies...\"",
+              "npm install",
+              "echo \"Building React app...\"",
+              "npm run build",
+              "echo \"Stopping old PM2 process if exists...\"",
+              "pm2 stop my-react-app || true",
+              "pm2 delete my-react-app || true",
+              "echo \"Starting PM2 to serve React app...\"",
+              "pm2 serve /var/www/my-react-app/dist 3000 --name my-react-app --spa",
+              "pm2 save",
+              "echo \"Deployment complete!\""
+            ]' \
+            --output text
