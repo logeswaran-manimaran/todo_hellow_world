@@ -135,14 +135,14 @@ jobs:
 
       - name: Deploy to EC2 via SSM
         run: |
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=private-ip-address,Values=${{ secrets.SERVER_IP }}" \
-            --query "Reservations[0].Instances[0].InstanceId" --output text)
-
+          # Use the instance ID directly from GitHub secret
+          INSTANCE_ID=${{ secrets.EC2_INSTANCE_ID }}
+      
           echo "Deploying to EC2 instance $INSTANCE_ID via SSM..."
-
-          aws ssm send-command \
-            --targets "Key=instanceIds,Values=i-012bcdce6e0c7a177" \
+      
+          # Send the deployment command
+          COMMAND_ID=$(aws ssm send-command \
+            --targets "Key=instanceIds,Values=$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Docker app" \
             --parameters 'commands=[
@@ -150,6 +150,20 @@ jobs:
               "docker pull 050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo:latest",
               "cd /home/ubuntu",
               "docker-compose down",
-              "docker-compose up -d --remove-orphans"
+              "docker-compose up -d --remove-orphans",
+              "docker ps"
             ]' \
-            --region ap-south-1
+            --region ap-south-1 \
+            --query "Command.CommandId" --output text)
+      
+          # Wait and get the output
+          echo "Waiting for command to complete..."
+          sleep 5
+      
+          aws ssm get-command-invocation \
+            --command-id $COMMAND_ID \
+            --instance-id $INSTANCE_ID \
+            --region ap-south-1 \
+            --query "StandardOutputContent" \
+            --output text
+      
