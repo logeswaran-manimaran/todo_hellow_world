@@ -151,7 +151,6 @@ jobs:
 
             echo "Restarting docker compose..."
             cd /home/ubuntu
-            docker compose pull
-            docker compose down
-            docker compose up -d
+            docker-compose down
+            docker-compose up -d
 
