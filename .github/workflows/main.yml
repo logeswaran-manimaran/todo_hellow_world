@@ -24,6 +24,60 @@
         # run: |
         #   aws s3 cp ./build/my-app.zip s3://my-deploy-bucket/path/
         #   echo "Deployment complete!"
+# name: Build & Push Docker to ECR (self-hosted)
+
+# on:
+#   push:
+#     branches: [ main ]
+
+# permissions:
+#   id-token: write
+#   contents: read
+
+# jobs:
+#   build-push:
+#     runs-on: self-hosted
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Configure AWS credentials via OIDC
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: arn:aws:iam::050752612531:role/githubaction
+#           aws-region: ap-south-1
+
+#       - name: Login to ECR
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       - name: Build Docker image
+#         run: |
+#           set -e
+#           IMAGE_URI=050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo
+#           TAG=latest
+#           SHA_TAG=${GITHUB_SHA::8}
+
+#           echo "Building ${IMAGE_URI}:${TAG} (context: ./my-react-app)"
+#           docker build -t ${IMAGE_URI}:${TAG} ./my-react-app
+
+#           echo "Also tagging image with SHA: ${SHA_TAG}"
+#           docker tag ${IMAGE_URI}:${TAG} ${IMAGE_URI}:${SHA_TAG}
+
+#           docker image ls | grep todo || true
+
+#       - name: Push images to ECR (latest + sha)
+#         run: |
+#           set -e
+#           IMAGE_URI=050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo
+#           TAG=latest
+#           SHA_TAG=${GITHUB_SHA::8}
+
+#           echo "Pushing ${IMAGE_URI}:${TAG}"
+#           docker push ${IMAGE_URI}:${TAG}
+
+#           echo "Pushing ${IMAGE_URI}:${SHA_TAG}"
+#           docker push ${IMAGE_URI}:${SHA_TAG}
 name: Build & Push Docker to ECR (self-hosted)
 
 on:
@@ -78,3 +132,27 @@ jobs:
 
           echo "Pushing ${IMAGE_URI}:${SHA_TAG}"
           docker push ${IMAGE_URI}:${SHA_TAG}
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: 13.200.161.67
+          username: ubuntu
+          password: Inpl2010@1
+          port: 22
+          script: |
+            set -e
+
+            echo "Logging into ECR..."
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 050752612531.dkr.ecr.ap-south-1.amazonaws.com
+
+            echo "Pulling latest docker image..."
+            docker pull 050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo:latest
+
+            echo "Restarting docker compose..."
+            cd /home/ec2-user/todo
+            docker compose down
+            docker compose up -d --remove-orphans
+
+            echo "Deployment finished successfully."
+
