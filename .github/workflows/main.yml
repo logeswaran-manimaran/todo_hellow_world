@@ -150,9 +150,8 @@ jobs:
             docker pull 050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo:latest
 
             echo "Restarting docker compose..."
-            cd /home/ec2-user/todo
+            cd /home/ubuntu
+            docker compose pull
             docker compose down
-            docker compose up -d --remove-orphans
-
-            echo "Deployment finished successfully."
+            docker compose up -d
 
