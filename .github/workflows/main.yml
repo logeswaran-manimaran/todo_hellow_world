@@ -133,24 +133,23 @@ jobs:
           echo "Pushing ${IMAGE_URI}:${SHA_TAG}"
           docker push ${IMAGE_URI}:${SHA_TAG}
 
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: 13.200.161.67
-          username: ubuntu
-          password: Inpl2010@1
-          port: 22
-          script: |
-            set -e
+      - name: Deploy to EC2 via SSM
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=private-ip-address,Values=${{ secrets.SERVER_IP }}" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
 
-            echo "Logging into ECR..."
-            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 050752612531.dkr.ecr.ap-south-1.amazonaws.com
+          echo "Deploying to EC2 instance $INSTANCE_ID via SSM..."
 
-            echo "Pulling latest docker image..."
-            docker pull 050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo:latest
-
-            echo "Restarting docker compose..."
-            cd /home/ubuntu
-            docker-compose down
-            docker-compose up -d
-
+          aws ssm send-command \
+            --targets "Key=instanceIds,Values=i-012bcdce6e0c7a177" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy Docker app" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 050752612531.dkr.ecr.ap-south-1.amazonaws.com",
+              "docker pull 050752612531.dkr.ecr.ap-south-1.amazonaws.com/todo:latest",
+              "cd /home/ubuntu",
+              "docker-compose down",
+              "docker-compose up -d --remove-orphans"
+            ]' \
+            --region ap-south-1
